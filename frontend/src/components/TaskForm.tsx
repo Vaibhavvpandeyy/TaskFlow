@@ -1,23 +1,45 @@
-import { useState, type FormEvent } from 'react'
+import { useState } from 'react'
+import type { FormEvent } from 'react'
 import { TASK_CATEGORIES, type TaskCategory } from '../types'
 import { toLocalDateString } from '../utils/dates'
 
 interface TaskFormProps {
-  onAdd: (title: string, category: TaskCategory, dueDate: string) => void
+    onAdd: (
+      title: string,
+      category: TaskCategory,
+      dueDate: string,
+    ) => Promise<boolean>
 }
 
 export function TaskForm({ onAdd }: TaskFormProps) {
   const [title, setTitle] = useState('')
   const [category, setCategory] = useState<TaskCategory>('Work')
   const [dueDate, setDueDate] = useState(toLocalDateString)
+  const [submitting, setSubmitting] = useState(false)
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  
+  
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    onAdd(title, category, dueDate)
-    setTitle('')
-    setCategory('Work')
-    setDueDate(toLocalDateString())
+
+    if (submitting) return
+
+    setSubmitting(true)
+
+    try {
+      const success = await onAdd(title, category, dueDate)
+
+      if (!success) return
+
+      setTitle('')
+      setCategory('Work')
+      setDueDate(toLocalDateString())
+    } finally {
+      setSubmitting(false)
+    }
   }
+
+
 
   return (
     <form className="task-form" onSubmit={handleSubmit}>
@@ -61,8 +83,12 @@ export function TaskForm({ onAdd }: TaskFormProps) {
         />
       </label>
 
-      <button type="submit" className="primary-btn">
-        Add Task
+      <button
+        type="submit"
+        className="primary-btn"
+        disabled={submitting}
+      >
+        {submitting ? 'Saving...' : 'Add Task'}
       </button>
     </form>
   )

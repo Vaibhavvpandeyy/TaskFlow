@@ -1,14 +1,15 @@
+
 export type FilterView = 'all' | 'today' | 'upcoming' | 'completed'
 
 export type TaskCategory = 'Work' | 'Personal' | 'Study' | 'Other'
 
 export interface Task {
-  id: string
+  id: number
   title: string
   category: TaskCategory
   completed: boolean
   dueDate: string
-  createdAt: string
+  createdAt?: string
 }
 
 export const TASK_CATEGORIES: TaskCategory[] = [

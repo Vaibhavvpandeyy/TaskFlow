@@ -15,77 +15,102 @@ export function useTasks() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Backend se tasks load karo jab app open ho
+  // Backend se tasks load karo
   useEffect(() => {
     let active = true
 
-    getTasks()
-      .then((data) => {
+    async function load() {
+      try {
+        const data = await getTasks()
+
         if (active) {
           setTasks(data)
           setError(null)
         }
-      })
-      .catch(() => {
+      } catch {
         if (active) {
           setError('Tasks load nahi ho paaye. Backend check karo.')
         }
-      })
-      .finally(() => {
-        if (active) setLoading(false)
-      })
+      } finally {
+        if (active) {
+          setLoading(false)
+        }
+      }
+    }
+
+    void load()
 
     return () => {
       active = false
     }
   }, [])
 
-  // Naya task backend mein save karo
+  // Naya task create karo
   const addTask = async (
     title: string,
     category: TaskCategory,
     dueDate: string,
-  ) => {
+  ): Promise<boolean> => {
     const trimmed = title.trim()
-    if (!trimmed) return
+
+    if (!trimmed) {
+      setError('Task ka title khaali nahi ho sakta.')
+      return false
+    }
 
     try {
       const newTask = await createTask(trimmed, category, dueDate)
+
       setTasks((current) => [newTask, ...current])
       setError(null)
+
+      return true
     } catch {
       setError('Task save nahi hua. Backend check karke dobara try karo.')
+      return false
     }
   }
 
-  // Task ka completion status backend mein update karo
-  const toggleTask = async (id: number) => {
+  // Task complete ya pending karo
+  const toggleTask = async (id: number): Promise<boolean> => {
     const task = tasks.find((item) => item.id === id)
-    if (!task) return
+
+    if (!task) {
+      setError('Task nahi mila.')
+      return false
+    }
 
     try {
       const updatedTask = await updateTask(id, !task.completed)
+
       setTasks((current) =>
         current.map((item) =>
           item.id === id ? updatedTask : item,
         ),
       )
+
       setError(null)
+      return true
     } catch {
       setError('Task update nahi hua. Dobara try karo.')
+      return false
     }
   }
 
-  // Task backend se delete karo
-  const deleteTask = async (id: number) => {
+  // Task delete karo
+  const deleteTask = async (id: number): Promise<boolean> => {
     try {
       await removeTask(id)
+
       setTasks((current) =>
         current.filter((task) => task.id !== id),
       )
+
       setError(null)
+      return true
     } catch {
       setError('Task delete nahi hua. Dobara try karo.')
+      return false
     }
   }
 
@@ -147,10 +172,13 @@ function matchesFilter(
   switch (filter) {
     case 'today':
       return !task.completed && task.dueDate <= today
+
     case 'upcoming':
       return !task.completed && task.dueDate > today
+
     case 'completed':
       return task.completed
+
     default:
       return true
   }

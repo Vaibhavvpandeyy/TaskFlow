@@ -16,6 +16,8 @@ function App() {
     addTask,
     toggleTask,
     deleteTask,
+    loading,
+    error,
   } = useTasks()
 
   const activeLabel =
@@ -32,8 +34,18 @@ function App() {
       <main className="main">
         <header className="page-header">
           <h1>My Tasks</h1>
-          <p className="page-subtitle">Showing {activeLabel.toLowerCase()}</p>
+          <p className="page-subtitle">
+            Showing {activeLabel.toLowerCase()}
+          </p>
         </header>
+
+        {loading && <p>Loading tasks...</p>}
+
+        {error && (
+          <p role="alert" className="error-message">
+            {error}
+          </p>
+        )}
 
         <SummaryCards
           total={stats.total}
