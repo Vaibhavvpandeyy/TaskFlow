@@ -1,47 +1,53 @@
+import os
+from urllib.parse import urlparse, urlunparse
 
+import psycopg
+from psycopg.rows import dict_row
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import sqlite3
 
 app = FastAPI(title="TaskFlow API")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "https://taskflow-frontend-yq2i.onrender.com",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://taskflow-frontend-yq2i.onrender.com",
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-DATABASE = "tasks.db"
-
 
 def get_connection():
-    connection = sqlite3.connect(DATABASE)
-    connection.row_factory = sqlite3.Row
-    return connection
+    database_url = os.environ.get("DATABASE_URL")
+
+    if not database_url:
+        raise RuntimeError("DATABASE_URL environment variable is missing")
+
+    # Render may provide a URL beginning with postgres://
+    if database_url.startswith("postgres://"):
+        database_url = "postgresql://" + database_url[len("postgres://"):]
+
+    return psycopg.connect(database_url, row_factory=dict_row)
 
 
 def init_db():
-    connection = get_connection()
-    connection.execute(
-        """
-        CREATE TABLE IF NOT EXISTS tasks (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            category TEXT NOT NULL DEFAULT 'Work',
-            due_date TEXT NOT NULL,
-            completed INTEGER NOT NULL DEFAULT 0
+    with get_connection() as connection:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS tasks (
+                id BIGSERIAL PRIMARY KEY,
+                title TEXT NOT NULL,
+                category TEXT NOT NULL DEFAULT 'Work',
+                due_date TEXT NOT NULL,
+                completed BOOLEAN NOT NULL DEFAULT FALSE
+            )
+            """
         )
-        """
-    )
-    connection.commit()
-    connection.close()
 
 
 init_db()
@@ -79,14 +85,12 @@ def health():
 
 @app.get("/tasks")
 def get_tasks():
-    connection = get_connection()
-    try:
+    with get_connection() as connection:
         tasks = connection.execute(
             "SELECT * FROM tasks ORDER BY id DESC"
         ).fetchall()
+
         return [format_task(task) for task in tasks]
-    finally:
-        connection.close()
 
 
 @app.post("/tasks")
@@ -99,69 +103,57 @@ def create_task(task: TaskCreate):
             detail="Task title cannot be empty",
         )
 
-    connection = get_connection()
-    try:
-        cursor = connection.execute(
+    with get_connection() as connection:
+        saved_task = connection.execute(
             """
             INSERT INTO tasks (title, category, due_date)
-            VALUES (?, ?, ?)
+            VALUES (%s, %s, %s)
+            RETURNING *
             """,
             (title, task.category, task.due_date),
-        )
-        connection.commit()
-
-        saved_task = connection.execute(
-            "SELECT * FROM tasks WHERE id = ?",
-            (cursor.lastrowid,),
         ).fetchone()
 
         return format_task(saved_task)
-    finally:
-        connection.close()
 
 
 @app.patch("/tasks/{task_id}")
 def update_task(task_id: int, task: TaskUpdate):
-    connection = get_connection()
-    try:
-        cursor = connection.execute(
-            "UPDATE tasks SET completed = ? WHERE id = ?",
-            (int(task.completed), task_id),
-        )
-        connection.commit()
+    with get_connection() as connection:
+        updated_task = connection.execute(
+            """
+            UPDATE tasks
+            SET completed = %s
+            WHERE id = %s
+            RETURNING *
+            """,
+            (task.completed, task_id),
+        ).fetchone()
 
-        if cursor.rowcount == 0:
+        if updated_task is None:
             raise HTTPException(
                 status_code=404,
                 detail="Task not found",
             )
 
-        updated_task = connection.execute(
-            "SELECT * FROM tasks WHERE id = ?",
-            (task_id,),
-        ).fetchone()
-
         return format_task(updated_task)
-    finally:
-        connection.close()
 
 
 @app.delete("/tasks/{task_id}")
 def delete_task(task_id: int):
-    connection = get_connection()
-    try:
-        cursor = connection.execute(
-            "DELETE FROM tasks WHERE id = ?",
+    with get_connection() as connection:
+        deleted_task = connection.execute(
+            """
+            DELETE FROM tasks
+            WHERE id = %s
+            RETURNING id
+            """,
             (task_id,),
-        )
-        connection.commit()
+        ).fetchone()
 
-        if cursor.rowcount == 0:
+        if deleted_task is None:
             raise HTTPException(
                 status_code=404,
                 detail="Task not found",
             )
 
         return {"message": "Task deleted successfully"}
-    finally:
-        connection.close()
