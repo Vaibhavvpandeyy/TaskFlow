@@ -1,7 +1,7 @@
 
 import type { Task, TaskCategory } from '../types'
 
-const API_URL = 'http://127.0.0.1:8000'
+const API_URL = import.meta.env.VITE_API_URL
 
 interface ApiTask {
   id: number
@@ -11,7 +11,7 @@ interface ApiTask {
   due_date: string | null
 }
 
-function toTask(task: ApiTask): Task {
+function toTask(task: ApiTask): Task {  
   return {
     id: task.id,
     title: task.title,
