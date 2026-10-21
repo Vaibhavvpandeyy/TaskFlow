@@ -1,4 +1,3 @@
-
 import type { Task, TaskCategory } from '../types'
 
 const API_URL = import.meta.env.VITE_API_URL
@@ -9,17 +8,29 @@ interface ApiTask {
   category: TaskCategory
   completed: boolean
   due_date: string | null
+  priority?: 'Low' | 'Medium' | 'High'
+  status?: 'Pending' | 'In Progress' | 'Completed'
+  assigned_to: number
+  assigned_by: number
+  assigned_username?: string | null
 }
 
-function toTask(task: ApiTask): Task {  
+
+function toTask(task: ApiTask): Task {
   return {
     id: task.id,
     title: task.title,
     category: task.category,
     completed: task.completed,
+    status: task.status ?? (task.completed ? 'Completed' : 'Pending'),
+    priority: task.priority ?? 'Medium',
     dueDate: task.due_date ?? '',
+    assignedTo: task.assigned_to,
+    assignedBy: task.assigned_by,
+    assignedUsername: task.assigned_username ?? null,
   }
 }
+
 
 async function request<T>(
   path: string,
